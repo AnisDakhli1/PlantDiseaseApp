@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Disease Detection</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌱 Plant Disease Detection</h1>
+            <p>Upload a leaf image to detect plant diseases</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p class="upload-text">Drag and drop an image here or click to browse</p>
+                    <p class="upload-subtext">Supports: JPG, PNG, JPEG</p>
+                    <input type="file" id="imageInput" accept="image/*" hidden>
+                </div>
+
+                <div class="preview-section" id="previewSection" style="display: none;">
+                    <img id="previewImage" alt="Preview">
+                    <button class="btn-secondary" id="removeBtn">Remove Image</button>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="predictBtn" disabled>Analyze Leaf</button>
+
+            <div class="result-section" id="resultSection" style="display: none;">
+                <h2>Prediction Results</h2>
+                <div class="result-card">
+                    <div class="disease-name" id="diseaseName"></div>
+                    <div class="confidence">
+                        <span>Confidence:</span>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" id="confidenceFill"></div>
+                        </div>
+                        <span id="confidenceText"></span>
+                    </div>
+                    <div class="top-predictions" id="topPredictions"></div>
+                </div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Analyzing image...</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>Model trained on 256×256 images, resized to 224×224 for prediction</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
