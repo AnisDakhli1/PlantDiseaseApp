@@ -1,19 +1,9 @@
 // Global variables
 let uploadedImage = null;
-let model = null;
+let uploadedFile = null;
 
-// Class names - UPDATE THESE based on your model's classes
-const CLASS_NAMES = [
-    'Apple___Apple_scab',
-    'Apple___Black_rot',
-    'Apple___Cedar_apple_rust',
-    'Apple___healthy',
-    'Tomato___Bacterial_spot',
-    'Tomato___Early_blight',
-    'Tomato___Late_blight',
-    'Tomato___healthy',
-    // Add all your disease classes here
-];
+// API endpoint
+const API_URL = 'http://localhost:5000';
 
 // DOM elements
 const uploadArea = document.getElementById('uploadArea');
@@ -29,21 +19,24 @@ const confidenceFill = document.getElementById('confidenceFill');
 const confidenceText = document.getElementById('confidenceText');
 const topPredictions = document.getElementById('topPredictions');
 
-// Load TensorFlow.js model
-async function loadModel() {
+// Check backend health
+async function checkBackendHealth() {
     try {
-        // For TensorFlow.js model (converted from Keras)
-        model = await tf.loadLayersModel('model/model.json');
-        console.log('Model loaded successfully');
+        const response = await fetch(`${API_URL}/health`);
+        const data = await response.json();
+        console.log('Backend status:', data);
+        if (!data.model_loaded) {
+            console.warn('Model not loaded on backend yet');
+        }
     } catch (error) {
-        console.error('Error loading model:', error);
-        alert('Failed to load model. Please ensure model files are in the correct location.');
+        console.error('Cannot connect to backend:', error);
+        alert('Cannot connect to backend server. Make sure Flask app is running on port 5000.');
     }
 }
 
 // Initialize the application
 window.addEventListener('DOMContentLoaded', () => {
-    loadModel();
+    checkBackendHealth();
     setupEventListeners();
 });
 
@@ -99,6 +92,7 @@ function handleFile(file) {
         return;
     }
     
+    uploadedFile = file;
     const reader = new FileReader();
     reader.onload = (e) => {
         uploadedImage = e.target.result;
@@ -116,6 +110,7 @@ function displayPreview(imageSrc) {
 }
 
 function removeImage() {
+    uploadedFile = null;
     uploadedImage = null;
     previewImage.src = '';
     uploadArea.style.display = 'block';
@@ -124,42 +119,8 @@ function removeImage() {
     resultSection.style.display = 'none';
     imageInput.value = '';
 }
-
-// Preprocess image to 224x224 and normalize
-async function preprocessImage(imageSrc) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = imageSrc;
-        
-        img.onload = () => {
-            // Create a canvas to resize the image to 224x224
-            const canvas = document.createElement('canvas');
-            canvas.width = 224;
-            canvas.height = 224;
-            const ctx = canvas.getContext('2d');
-            
-            // Draw and resize image to 224x224
-            ctx.drawImage(img, 0, 0, 224, 224);
-            
-            // Convert to tensor
-            const tensor = tf.browser.fromPixels(canvas)
-                .toFloat()
-                .div(255.0) // Normalize to [0, 1]
-                .expandDims(0); // Add batch dimension
-            
-            resolve(tensor);
-        };
-    });
-}
-
 async function predictDisease() {
-    if (!model) {
-        alert('Model is still loading. Please wait...');
-        return;
-    }
-    
-    if (!uploadedImage) {
+    if (!uploadedFile) {
         alert('Please upload an image first');
         return;
     }
@@ -170,59 +131,73 @@ async function predictDisease() {
     predictBtn.disabled = true;
     
     try {
-        // Preprocess the image
-        const tensor = await preprocessImage(uploadedImage);
+        // Create FormData to send image to backend
+        const formData = new FormData();
+        formData.append('image', uploadedFile);
         
-        // Make prediction
-        const predictions = await model.predict(tensor);
-        const predArray = await predictions.data();
+        console.log('Sending request to:', `${API_URL}/predict`);
         
-        // Clean up tensor
-        tensor.dispose();
-        predictions.dispose();
+        // Send to backend API
+        const response = await fetch(`${API_URL}/predict`, {
+            method: 'POST',
+            body: formData
+        });
         
-        // Get top 3 predictions
-        const topK = getTopK(predArray, 3);
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
         
-        // Display results
-        displayResults(topK);
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            console.error('Failed to parse response as JSON:', e);
+            alert(`Server error: ${responseText}`);
+            return;
+        }
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}, message: ${result.error || 'Unknown error'}`);
+        }
+        
+        if (result.error) {
+            alert(`Backend error: ${result.error}`);
+            return;
+        }
+        
+        console.log('Prediction result:', result);
+        
+        // Display results from backend
+        displayResults(result);
         
     } catch (error) {
         console.error('Prediction error:', error);
-        alert('Error making prediction. Please try again.');
+        alert(`Error making prediction: ${error.message}`);
     } finally {
         loading.style.display = 'none';
         predictBtn.disabled = false;
     }
 }
 
-function getTopK(predictions, k) {
-    const indexed = predictions.map((prob, index) => ({ prob, index }));
-    indexed.sort((a, b) => b.prob - a.prob);
-    return indexed.slice(0, k);
-}
-
-function displayResults(topK) {
+function displayResults(result) {
     // Display main prediction
-    const topPrediction = topK[0];
-    const className = CLASS_NAMES[topPrediction.index] || `Class ${topPrediction.index}`;
-    const confidence = (topPrediction.prob * 100).toFixed(2);
+    const confidence = (result.confidence * 100).toFixed(2);
     
-    diseaseName.textContent = formatClassName(className);
+    diseaseName.textContent = formatClassName(result.predicted_class);
     confidenceFill.style.width = `${confidence}%`;
     confidenceText.textContent = `${confidence}%`;
     
     // Display top 3 predictions
     topPredictions.innerHTML = '<h3>Other Possibilities:</h3>';
-    topK.slice(1).forEach(pred => {
+    result.top_predictions.slice(1).forEach(pred => {
         const item = document.createElement('div');
         item.className = 'prediction-item';
         
         const name = document.createElement('span');
-        name.textContent = formatClassName(CLASS_NAMES[pred.index] || `Class ${pred.index}`);
+        name.textContent = formatClassName(pred.class);
         
         const prob = document.createElement('span');
-        prob.textContent = `${(pred.prob * 100).toFixed(2)}%`;
+        prob.textContent = `${(pred.confidence * 100).toFixed(2)}%`;
         
         item.appendChild(name);
         item.appendChild(prob);
