@@ -17,7 +17,7 @@ const confidenceText = document.getElementById('confidenceText');
 const topPredictions = document.getElementById('topPredictions');
 
 // API endpoint (change this based on your deployment)
-const API_URL = 'http://localhost:5000/predict';  // Local development
+const API_URL = '/predict';  // Local development
 // const API_URL = 'https://your-domain.com/predict';  // Production
 
 // Initialize the application
@@ -47,7 +47,7 @@ function setupEventListeners() {
 
 async function checkServerHealth() {
     try {
-        const response = await fetch('http://localhost:5000/health');
+        const response = await fetch('/health');
         const data = await response.json();
         if (!data.model_loaded) {
             console.warn('Model is not loaded on the server');
